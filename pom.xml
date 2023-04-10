@@ -44,6 +44,13 @@
             <artifactId>lombok</artifactId>
         </dependency>
 
+        <!--hanlp1.x-->
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>portable-1.7.8</version>
+        </dependency>
+
     </dependencies>
 
     <build>
