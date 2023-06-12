@@ -3,11 +3,28 @@ server:
   port: 5001
 
 # SpringBoot2.7.8 + Swagger2.9.2
+
+
+# MybatisPlusConfig
 spring:
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://10.109.246.188:3306/icoe_sbai
+    username: root
+    password: vpc-8vbd
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:mysql-ini.sql
+      # data-locations: classpath:data.sql
 
-# 请求文本分类服务的路径
-
-
+# ApplicationConfig
+weight:
+  char: 0.25
+  pinyin-tone: 0.25
+  pinyin-without-tone: 0.25
+  set: 0.25

@@ -1,11 +1,122 @@
 package cn.edu.bupt.aiswitchboard.service;
 
+import cn.edu.bupt.aiswitchboard.config.ApplicationConfig;
+import cn.edu.bupt.aiswitchboard.dao.WorkerDao;
+import cn.edu.bupt.aiswitchboard.model.NameFinderFindRequest;
+import cn.edu.bupt.aiswitchboard.model.NameFinderInsertRequest;
+import cn.edu.bupt.aiswitchboard.model.Worker;
+import cn.edu.bupt.aiswitchboard.utils.ScoreUtils;
+import cn.edu.bupt.aiswitchboard.utils.PinyinUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.*;
 
 @Service
 public class NameFinderServiceImpl implements NameFinderService{
+
+    // 注入Config
+    private final ApplicationConfig applicationConfig;
+    public NameFinderServiceImpl(ApplicationConfig applicationConfig) {
+        this.applicationConfig = applicationConfig;
+    }
+
+    // 注入Dao
+    @Autowired
+    private WorkerDao workerDao;
+
     @Override
-    public Integer test(Integer a) {
-        return a;
+    public Object find(NameFinderFindRequest requestParameters) {
+        // 制作初始值，并添加透传信息
+        Map<String, Object> data = new HashMap<>();
+        data.put("corpId", requestParameters.getCorpId());
+        data.put("taskId", requestParameters.getTaskId());
+
+        // 开始执行处理
+        String content = requestParameters.getContent();
+//        System.out.println("content: " + content);
+//        System.out.println(content.getClass());
+
+        // 分词，过滤，并制作对于传入文字的分词（传入很可能是更长的）
+        String mandarinContent = PinyinUtils.getPinyin(content, "withTone");  // 含拼音的分词
+        String mandarinStripContent = PinyinUtils.getPinyin(content, "withoutTone");  // 不含拼音的分词
+        String mandarinSetContent = PinyinUtils.toMandarinSet(mandarinStripContent);
+
+        // 方法1：从数据库里select把所有的select出来，然后完成逐条的进行匹配，并制作逐条匹配的返回结果
+        List<Worker> workerList = workerDao.selectList(null);
+        List<Map<String, Object>> matchRes = new ArrayList<>();
+//        System.out.println(workerList);
+//        System.out.println(workerList.toString());
+
+        for (Worker worker : workerList) {
+            String dbPer = worker.getPer();
+            String dbDep = worker.getDep();
+            String dbMandarinPer = worker.getMandarinPer();
+            String dbMandarinStripPer = worker.getMandarinStripPer();
+            String dbMandarinDep = worker.getMandarinDep();
+            String dbMandarinStripDep = worker.getMandarinStripDep();
+            String dbMandarinSet = worker.getMandarinSet();
+
+            double scoreChar = ScoreUtils.basicEditDistance(content, dbPer+dbDep);  // 原字符级别的编辑距离
+            double scorePinyinTone = ScoreUtils.strHashEditDistance(mandarinContent, dbMandarinPer+dbMandarinDep);  // 含拼音级别的编辑距离
+            double scorePinyinWithoutTone = ScoreUtils.strHashEditDistance(mandarinStripContent, dbMandarinStripPer+dbMandarinStripDep);  // 不含拼音级别的编辑距离
+            double scoreSet = ScoreUtils.setScore(mandarinSetContent, dbMandarinSet);
+
+//            System.out.println("scoreChar: " + scoreChar);
+//            System.out.println("scorePinyinTone: " + scorePinyinTone);
+//            System.out.println("scorePinyinWithoutTone: " + scorePinyinWithoutTone);
+//            System.out.println("scoreSet: " + scoreSet);
+
+            double totalScore = applicationConfig.getWeightChar() * scoreChar + applicationConfig.getWeightPinyinTone() * scorePinyinTone +
+                                applicationConfig.getWeightPinyinWithoutTone() * scorePinyinWithoutTone + applicationConfig.getWeightSet() * scoreSet;
+
+            Map<String, Object> mp = new HashMap<>();
+            mp.put("per", dbPer);
+            mp.put("dep", dbDep);
+            mp.put("score", totalScore);
+            matchRes.add(mp);
+        }
+
+        // 按照score字段进行排序
+        Collections.sort(matchRes, new Comparator<Map<String, Object>>() {
+            @Override
+            public int compare(Map<String, Object> o1, Map<String, Object> o2) {
+                // 降序排序
+                double score1 = (double) o1.get("score");
+                double score2 = (double) o2.get("score");
+                return Double.compare(score2, score1);
+            }
+        });
+        data.put("match", matchRes);
+//        for (Map<String, Object> mr : matchRes) {
+//            System.out.println(mr.toString());
+//        }
+        return data;
+    }
+
+    public Object insert(NameFinderInsertRequest requestParameters) {
+        // 制作初始值，并添加透传信息
+        Map<String, Object> data = new HashMap<>();
+
+        // 提取参数
+        String corpId = requestParameters.getCorpId();
+        String dep = requestParameters.getDep();
+        String per = requestParameters.getPer();
+
+        // 执行转化为拼音的一些处理，返回用空格分割的String可行
+        String mandarinPer = PinyinUtils.getPinyin(per, "withTone");
+        String mandarinStripPer = PinyinUtils.getPinyin(per, "withoutTone");
+        String mandarinDep = PinyinUtils.getPinyin(dep, "withTone");
+        String mandarinStripDep = PinyinUtils.getPinyin(dep, "withoutTone");
+
+        // 执行转化为音节的一些处理
+        String mandarinSet = PinyinUtils.toMandarinSet(mandarinStripPer) + PinyinUtils.toMandarinSet(mandarinStripDep);
+        System.out.println("mandarinSet: " + mandarinSet);
+
+        // 插入数据库
+        Worker worker = new Worker(corpId, dep, per, "12345678", "12345678", mandarinPer, mandarinStripPer, mandarinDep, mandarinStripDep, mandarinSet, "", "");
+        workerDao.insert(worker);
+
+        return data;
     }
 }
