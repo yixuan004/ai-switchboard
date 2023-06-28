@@ -7,6 +7,7 @@ import cn.edu.bupt.aiswitchboard.exceptions.NotImplementedException;
 import cn.edu.bupt.aiswitchboard.model.HelloJsonInputRequest;
 import cn.edu.bupt.aiswitchboard.model.NameFinderFindRequest;
 import cn.edu.bupt.aiswitchboard.model.NameFinderInsertRequest;
+import cn.edu.bupt.aiswitchboard.model.NameFinderUpdateRequest;
 import cn.edu.bupt.aiswitchboard.service.NameFinderServiceImpl;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
@@ -39,8 +40,13 @@ public class NameFinderController {
             return resp;
         }
         // 进入Service层处理
-        Object data = nameFinderService.find(nameFinderFindRequest);
-        resp.update(ResponseCode.SUCCESS.getCode(), ResponseMessage.SUCCESS.getMessage(), data);
+        try {
+            Object data = nameFinderService.find(nameFinderFindRequest);
+            resp.update(ResponseCode.SUCCESS.getCode(), ResponseMessage.SUCCESS.getMessage(), data);
+        } catch (Exception e) {
+            resp.update(ResponseCode.UNKNOWNERROR.getCode(), ResponseMessage.UNKNOWNERROR.getMessage(), e.getMessage());
+            return resp;
+        }
         return resp;
     }
 
@@ -56,6 +62,7 @@ public class NameFinderController {
         // 进入Service层处理
         try {
             Object data = nameFinderService.insert(nameFinderInsertRequest);
+            resp.update(ResponseCode.SUCCESS.getCode(), ResponseMessage.SUCCESS.getMessage(), data);
         } catch (DuplicateKeyException e) {
             resp.update(ResponseCode.UNKNOWNERROR.getCode(), ResponseMessage.UNKNOWNERROR.getMessage(), e.getMessage());
             return resp;
@@ -63,7 +70,27 @@ public class NameFinderController {
             resp.update(ResponseCode.UNKNOWNERROR.getCode(), ResponseMessage.UNKNOWNERROR.getMessage(), e.getMessage());
             return resp;
         }
-        // resp.update(ResponseCode.SUCCESS.getCode(), ResponseMessage.SUCCESS.getMessage(), data);
         return resp;
     }
+
+    @ApiOperation("部门人名查找update接口，可以重新加载数据库到内存中")
+    @PostMapping("/update")
+    public Response<Object> update(@RequestBody NameFinderUpdateRequest nameFinderUpdateRequest) {
+        Response<Object> resp = new Response<>();  // 初始化返回值
+        // 在Controller层检查接口参数是否满足要求
+        if (!nameFinderUpdateRequest.check()) {
+            resp.update(ResponseCode.UNKNOWNERROR.getCode(), ResponseMessage.UNKNOWNERROR.getMessage(), "输入字段不符合要求，请检查");
+            return resp;
+        }
+        // 进入Service层处理
+        try {
+            Object data = nameFinderService.update(nameFinderUpdateRequest);
+            resp.update(ResponseCode.SUCCESS.getCode(), ResponseMessage.SUCCESS.getMessage(), data);
+        } catch (Exception e) {
+            resp.update(ResponseCode.UNKNOWNERROR.getCode(), ResponseMessage.UNKNOWNERROR.getMessage(), e.getMessage());
+        }
+
+        return resp;
+    }
+
 }

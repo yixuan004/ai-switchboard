@@ -2,8 +2,11 @@ package cn.edu.bupt.aiswitchboard.service;
 
 import cn.edu.bupt.aiswitchboard.config.ApplicationConfig;
 import cn.edu.bupt.aiswitchboard.dao.WorkerDao;
+import cn.edu.bupt.aiswitchboard.exceptions.NotImplementedException;
+import cn.edu.bupt.aiswitchboard.init.InitWorkerData;
 import cn.edu.bupt.aiswitchboard.model.NameFinderFindRequest;
 import cn.edu.bupt.aiswitchboard.model.NameFinderInsertRequest;
+import cn.edu.bupt.aiswitchboard.model.NameFinderUpdateRequest;
 import cn.edu.bupt.aiswitchboard.model.Worker;
 import cn.edu.bupt.aiswitchboard.utils.ScoreUtils;
 import cn.edu.bupt.aiswitchboard.utils.PinyinUtils;
@@ -31,9 +34,11 @@ public class NameFinderServiceImpl implements NameFinderService{
         Map<String, Object> data = new HashMap<>();
         data.put("corpId", requestParameters.getCorpId());
         data.put("taskId", requestParameters.getTaskId());
+        data.put("version", requestParameters.getVersion());
 
         // 开始执行处理
         String content = requestParameters.getContent();
+        String version = requestParameters.getVersion();
 //        System.out.println("content: " + content);
 //        System.out.println(content.getClass());
 
@@ -42,55 +47,98 @@ public class NameFinderServiceImpl implements NameFinderService{
         String mandarinStripContent = PinyinUtils.getPinyin(content, "withoutTone");  // 不含拼音的分词
         String mandarinSetContent = PinyinUtils.toMandarinSet(mandarinStripContent);
 
-        // 方法1：从数据库里select把所有的select出来，然后完成逐条的进行匹配，并制作逐条匹配的返回结果
-        List<Worker> workerList = workerDao.selectList(null);
+        // 执行数据筛选
         List<Map<String, Object>> matchRes = new ArrayList<>();
-//        System.out.println(workerList);
-//        System.out.println(workerList.toString());
+        if (version.equals("1.0")) {
+            // 方法1，数据库select+在线实时分词：从数据库里面选出数据，然后用PinyinUtils执行分词
+            List<Worker> workerList = workerDao.selectList(null);
+            for (Worker worker: workerList) {
+                String dbPer = worker.getPer();
+                String dbDep = worker.getDep();
+                String dbMandarinPer = PinyinUtils.getPinyin(dbPer, "withTone");
+                String dbMandarinStripPer =  PinyinUtils.getPinyin(dbPer, "withoutTone");
+                String dbMandarinDep = PinyinUtils.getPinyin(dbDep, "withTone");
+                String dbMandarinStripDep = PinyinUtils.getPinyin(dbDep, "withoutTone");
+                String dbMandarinSet =  PinyinUtils.toMandarinSet(dbMandarinStripPer) + PinyinUtils.toMandarinSet(dbMandarinStripDep);
 
-        for (Worker worker : workerList) {
-            String dbPer = worker.getPer();
-            String dbDep = worker.getDep();
-            String dbMandarinPer = worker.getMandarinPer();
-            String dbMandarinStripPer = worker.getMandarinStripPer();
-            String dbMandarinDep = worker.getMandarinDep();
-            String dbMandarinStripDep = worker.getMandarinStripDep();
-            String dbMandarinSet = worker.getMandarinSet();
+                double scoreChar = ScoreUtils.basicEditDistance(content, dbPer+dbDep);  // 原字符级别的编辑距离
+                double scorePinyinTone = ScoreUtils.strHashEditDistance(mandarinContent, dbMandarinPer+dbMandarinDep);  // 含拼音级别的编辑距离
+                double scorePinyinWithoutTone = ScoreUtils.strHashEditDistance(mandarinStripContent, dbMandarinStripPer+dbMandarinStripDep);  // 不含拼音级别的编辑距离
+                double scoreSet = ScoreUtils.setScore(mandarinSetContent, dbMandarinSet);
+                double totalScore = applicationConfig.getWeightChar() * scoreChar + applicationConfig.getWeightPinyinTone() * scorePinyinTone +
+                        applicationConfig.getWeightPinyinWithoutTone() * scorePinyinWithoutTone + applicationConfig.getWeightSet() * scoreSet;
 
-            double scoreChar = ScoreUtils.basicEditDistance(content, dbPer+dbDep);  // 原字符级别的编辑距离
-            double scorePinyinTone = ScoreUtils.strHashEditDistance(mandarinContent, dbMandarinPer+dbMandarinDep);  // 含拼音级别的编辑距离
-            double scorePinyinWithoutTone = ScoreUtils.strHashEditDistance(mandarinStripContent, dbMandarinStripPer+dbMandarinStripDep);  // 不含拼音级别的编辑距离
-            double scoreSet = ScoreUtils.setScore(mandarinSetContent, dbMandarinSet);
+                Map<String, Object> mp = new HashMap<>();
+                mp.put("per", dbPer);
+                mp.put("dep", dbDep);
+                mp.put("score", totalScore);
+                matchRes.add(mp);
+            }
+        } else if (version.equals("2.0")) {
+            // 方法2，离线预分词+数据库select：从数据库里select把所有的select出来，然后完成逐条的进行匹配，并制作逐条匹配的返回结果
+            List<Worker> workerList = workerDao.selectList(null);
+            for (Worker worker : workerList) {
+                String dbPer = worker.getPer();
+                String dbDep = worker.getDep();
+                String dbMandarinPer = worker.getMandarinPer();
+                String dbMandarinStripPer = worker.getMandarinStripPer();
+                String dbMandarinDep = worker.getMandarinDep();
+                String dbMandarinStripDep = worker.getMandarinStripDep();
+                String dbMandarinSet = worker.getMandarinSet();
 
-//            System.out.println("scoreChar: " + scoreChar);
-//            System.out.println("scorePinyinTone: " + scorePinyinTone);
-//            System.out.println("scorePinyinWithoutTone: " + scorePinyinWithoutTone);
-//            System.out.println("scoreSet: " + scoreSet);
+                double scoreChar = ScoreUtils.basicEditDistance(content, dbPer+dbDep);  // 原字符级别的编辑距离
+                double scorePinyinTone = ScoreUtils.strHashEditDistance(mandarinContent, dbMandarinPer+dbMandarinDep);  // 含拼音级别的编辑距离
+                double scorePinyinWithoutTone = ScoreUtils.strHashEditDistance(mandarinStripContent, dbMandarinStripPer+dbMandarinStripDep);  // 不含拼音级别的编辑距离
+                double scoreSet = ScoreUtils.setScore(mandarinSetContent, dbMandarinSet);
+                double totalScore = applicationConfig.getWeightChar() * scoreChar + applicationConfig.getWeightPinyinTone() * scorePinyinTone +
+                        applicationConfig.getWeightPinyinWithoutTone() * scorePinyinWithoutTone + applicationConfig.getWeightSet() * scoreSet;
 
-            double totalScore = applicationConfig.getWeightChar() * scoreChar + applicationConfig.getWeightPinyinTone() * scorePinyinTone +
-                                applicationConfig.getWeightPinyinWithoutTone() * scorePinyinWithoutTone + applicationConfig.getWeightSet() * scoreSet;
+                Map<String, Object> mp = new HashMap<>();
+                mp.put("per", dbPer);
+                mp.put("dep", dbDep);
+                mp.put("score", totalScore);
+                matchRes.add(mp);
+            }
+        } else if (version.equals("3.0")) {
+            // 方法3，直接预加载在内存中（这可能类似于redis的思想了，但是这里没有用到）
+            // 这种加载方式在启动多份的时候会有问题，多线程数据不同步的问题，自己使用redis给出过一套解决方案
+            for (Worker worker : InitWorkerData.workerList) {
+                String dbPer = worker.getPer();
+                String dbDep = worker.getDep();
+                String dbMandarinPer = worker.getMandarinPer();
+                String dbMandarinStripPer = worker.getMandarinStripPer();
+                String dbMandarinDep = worker.getMandarinDep();
+                String dbMandarinStripDep = worker.getMandarinStripDep();
+                String dbMandarinSet = worker.getMandarinSet();
 
-            Map<String, Object> mp = new HashMap<>();
-            mp.put("per", dbPer);
-            mp.put("dep", dbDep);
-            mp.put("score", totalScore);
-            matchRes.add(mp);
+                double scoreChar = ScoreUtils.basicEditDistance(content, dbPer+dbDep);  // 原字符级别的编辑距离
+                double scorePinyinTone = ScoreUtils.strHashEditDistance(mandarinContent, dbMandarinPer+dbMandarinDep);  // 含拼音级别的编辑距离
+                double scorePinyinWithoutTone = ScoreUtils.strHashEditDistance(mandarinStripContent, dbMandarinStripPer+dbMandarinStripDep);  // 不含拼音级别的编辑距离
+                double scoreSet = ScoreUtils.setScore(mandarinSetContent, dbMandarinSet);
+                double totalScore = applicationConfig.getWeightChar() * scoreChar + applicationConfig.getWeightPinyinTone() * scorePinyinTone +
+                        applicationConfig.getWeightPinyinWithoutTone() * scorePinyinWithoutTone + applicationConfig.getWeightSet() * scoreSet;
+
+                Map<String, Object> mp = new HashMap<>();
+                mp.put("per", dbPer);
+                mp.put("dep", dbDep);
+                mp.put("score", totalScore);
+                matchRes.add(mp);
+            }
+        } else {
+            throw new NotImplementedException();
         }
 
-        // 按照score字段进行排序
+        // 按照score字段降序排序，然后把结果加入到data里面
         Collections.sort(matchRes, new Comparator<Map<String, Object>>() {
             @Override
             public int compare(Map<String, Object> o1, Map<String, Object> o2) {
-                // 降序排序
                 double score1 = (double) o1.get("score");
                 double score2 = (double) o2.get("score");
-                return Double.compare(score2, score1);
+                return Double.compare(score2, score1);  // 降序排序
             }
         });
         data.put("match", matchRes);
-//        for (Map<String, Object> mr : matchRes) {
-//            System.out.println(mr.toString());
-//        }
+
         return data;
     }
 
@@ -116,6 +164,16 @@ public class NameFinderServiceImpl implements NameFinderService{
         // 插入数据库
         Worker worker = new Worker(corpId, dep, per, "12345678", "12345678", mandarinPer, mandarinStripPer, mandarinDep, mandarinStripDep, mandarinSet, "", "");
         workerDao.insert(worker);
+
+        return data;
+    }
+
+    public Object update(NameFinderUpdateRequest requestParameters) {
+        // 制作初始值，并添加透传信息
+        Map<String, Object> data = new HashMap<>();
+
+        // 把数据库中的数据重新加载
+        InitWorkerData.workerList =  workerDao.selectList(null);
 
         return data;
     }

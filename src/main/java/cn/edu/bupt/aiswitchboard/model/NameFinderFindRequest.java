@@ -9,14 +9,17 @@ public class NameFinderFindRequest {
     private String corpId;
     @ApiModelProperty(value = "任务标识字段，目前仅支持设置为test", example = "test")
     private String taskId;
+    @ApiModelProperty(value = "标识使用方法的版本，在线实时分词/离线分词/内存加载三种方式，分别对应version1.0 2.0 3.0", example = "1.0")
+    private String version;
 
     public NameFinderFindRequest() {
     }
 
-    public NameFinderFindRequest(String content, String corpId, String taskId) {
+    public NameFinderFindRequest(String content, String corpId, String taskId, String version) {
         this.content = content;
         this.corpId = corpId;
         this.taskId = taskId;
+        this.version = version;
     }
 
     public String getContent() {
@@ -43,19 +46,27 @@ public class NameFinderFindRequest {
         this.taskId = taskId;
     }
 
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
     @Override
     public String toString() {
         return "NameFinderFindRequest{" +
                 "content='" + content + '\'' +
                 ", corpId='" + corpId + '\'' +
                 ", taskId='" + taskId + '\'' +
+                ", version='" + version + '\'' +
                 '}';
     }
 
-
     public boolean check() {
         // 非空检查
-        if (this.content == null ||  this.corpId == null || this.taskId == null) {
+        if (this.content == null ||  this.corpId == null || this.taskId == null || this.version == null) {
             return false;
         }
         return true;
