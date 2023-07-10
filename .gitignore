@@ -1,6 +1,7 @@
 # hanlp数据路径，把文件夹的结构基本保存下来，官网下载路径：https://github.com/hankcs/HanLP/tree/1.x
 *.DS_Store
 target
+documents
 src/main/resources/static/data/dictionary/*
 !src/main/resources/static/data/dictionary/.gitkeep
 src/main/resources/static/data/model/*

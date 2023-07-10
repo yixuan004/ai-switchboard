@@ -137,7 +137,7 @@ public class NameFinderServiceImpl implements NameFinderService{
                 return Double.compare(score2, score1);  // 降序排序
             }
         });
-        data.put("match", matchRes);
+        data.put("match", matchRes.subList(0, 5));
 
         return data;
     }
