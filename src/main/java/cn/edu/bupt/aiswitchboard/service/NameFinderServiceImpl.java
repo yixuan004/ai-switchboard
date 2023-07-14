@@ -30,6 +30,9 @@ public class NameFinderServiceImpl implements NameFinderService{
 
     @Override
     public Object find(NameFinderFindRequest requestParameters) {
+        String test_simple_case;
+        String test[];
+
         // 制作初始值，并添加透传信息
         Map<String, Object> data = new HashMap<>();
         data.put("corpId", requestParameters.getCorpId());

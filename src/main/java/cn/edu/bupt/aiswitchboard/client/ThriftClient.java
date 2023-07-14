@@ -21,8 +21,7 @@ public class ThriftClient {
     }
 
     public void callPythonService(String sceneName, String text) {
-        try {
-            TTransport transport = new TSocket(host, port);
+        try (TTransport transport = new TSocket(host, port)) {
             transport.open();
 
             TProtocol protocol = new TBinaryProtocol(transport);
@@ -34,8 +33,6 @@ public class ThriftClient {
 
             int classifyResult = client.classify(text);
             System.out.println("classifyResult result: " + classifyResult);
-
-            transport.close();
         } catch (Exception e) {
             e.printStackTrace();
         }

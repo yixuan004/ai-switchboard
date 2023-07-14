@@ -13,7 +13,7 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://10.109.246.188:3306/icoe_sbai
+    url: jdbc:mysql://10.109.246.188:3306/icoe_sbai?useSSL=false
     username: root
     password: vpc-8vbd
   sql:
